@@ -1,0 +1,113 @@
+
+=== step1_slow.py ===
+The model: 1,237,057 numbers, 6 layers. It looks back over 256 characters.
+On text it never saw it names the next character right 54.2 % of the time.
+Real words in what it writes: 89 %. A sample:
+
+ROMEO:
+But, support! musurnis' that, you are shall winds,
+By the cause.
+
+WARWICK:
+Why, that now, stay, sir, grat Pila?
+
+JULIET:
+Pray you, sirs, of there:
+Play your put
+
+Time to write one character, by its place in the text:
+  character  16:  0.74 ms
+  character  32:  0.81 ms
+  character  64:  1.04 ms
+  character 128:  1.61 ms
+  character 256:  2.79 ms
+
+All 249 characters: 420 ms.
+Characters pushed through the layers: 32,619 (the text is only 256 long).
+
+=== step2_same.py ===
+Largest change in any number of the first 100 characters:
+  after layer 1: 0.0000000   (a typical number there is 1.31)
+  after layer 2: 0.0000000   (a typical number there is 2.12)
+  after layer 3: 0.0000000   (a typical number there is 2.35)
+  after layer 4: 0.0000000   (a typical number there is 2.30)
+  after layer 5: 0.0000000   (a typical number there is 2.07)
+  after layer 6: 0.0000000   (a typical number there is 2.62)
+
+The second run computed 606 lists. 600 of them were already known: 99.0 %.
+Reason: a character only looks back. A new character at the end cannot change the ones before it.
+
+=== step3_cache.py ===
+Characters written both ways: 3,840. The same in both: 3,840.
+Largest gap between the scores of the two ways: 0.000045 (a typical score is 3.4).
+
+The cache after 256 characters: 6 layers, each with keys and values of shape (4, 256, 32)
+(heads, characters, numbers per head). That is 393,216 numbers.
+
+=== step4_race.py ===
+Time to write one character (ms):      slow    cache
+  character  16:                       0.74    0.45
+  character  32:                       0.81    0.45
+  character  64:                       1.04    0.40
+  character 128:                       1.61    0.41
+  character 256:                       2.79    0.52
+
+Time to write the text up to a length (ms):
+   64 characters: slow     51   cache    26   2.0 times faster
+  128 characters: slow    140   cache    52   2.7 times faster
+  256 characters: slow    420   cache   111   3.8 times faster
+
+Characters pushed through the layers: slow 32,619, cache 255.
+The first step of the cache reads the whole start, so it is the slowest: 0.81 ms.
+
+=== step5_read.py ===
+Reading 200 characters in one pass:         2.3 ms  (0.012 ms per character)
+Reading them one after the other:          91.6 ms  (0.458 ms per character)
+Both leave the same cache (largest gap 0.000009). One pass is 39.8 times faster.
+
+A request with this prompt: the first character arrives after 2.3 ms, every later one after 0.46 ms.
+Reading the prompt is called prefill. Writing one character at a time is called decode.
+
+=== step6_price.py ===
+One character in the cache: 6,144 bytes.
+A full window of 256 characters: 1,572,864 bytes. The rule gives 1,572,864.
+The model itself: 4,948,228 bytes. One full chat keeps 32 % of that.
+3.1 full chats at the same time need as much memory as the model.
+
+Keep every number in 2 bytes: the cache is half the size, 786,432 bytes.
+Of 1,920 characters written (always the favourite), 0 came out different.
+
+=== step7_share.py ===
+Request two is 208 characters long. 200 of them are the shared start.
+Read all of it:                 2.37 ms before the first character.
+Take the shared cache instead:  0.96 ms. That is 2.5 times sooner.
+The 40 characters it writes are the same: True.
+
+Request three: character 6 of the shared start is different.
+Use the old cache anyway: the scores for the next character are off by up to 0.02, and 29 of 40 characters come out different.
+Keep only the first 5 characters of the cache: the text is right again (True), but reading takes 2.42 ms.
+A cache fits only a text that starts with exactly the same characters.
+
+=== exercise.py ===
+150 characters past the window, each time with the correct text before it:
+  the favourite next character is different in 100 of 150 steps
+  the scores are off by up to 18.19
+Why: every kept key and value was computed for a character at its old position, and with the dropped
+characters in view. After the slide each character sits one position earlier, so the kept numbers are stale.
+
+Read the whole window again for every character: 2.77 ms per character.
+Cut to the last 128 characters, read them once, write on with the cache: 0.53 ms per character.
+The second way is fast, but the model now sees less of the old text, so it writes a different continuation.
+
+=== tests.py ===
+ok   one character at a time gives the scores of one pass
+ok   reading in two pieces gives the scores of one pass
+ok   the cache holds every character once
+ok   cache size follows the rule
+ok   a new character does not change the ones before it
+ok   slow and cached writing agree, favourite
+ok   slow and cached writing agree, loaded die
+ok   a cut copy keeps only the first characters
+ok   a cut cache can be filled again
+
+9 checks passed
